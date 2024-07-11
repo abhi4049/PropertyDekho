@@ -29,6 +29,9 @@ const userSchema = new Schema(
             type: String,
             required: [true, 'Password is required']
         },
+        favorites: [{ 
+            type: mongoose.Schema.Types.ObjectId, 
+            ref: 'Favorite' }],
         refreshToken: {
             type: String
         }
