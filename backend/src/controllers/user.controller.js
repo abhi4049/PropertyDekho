@@ -2,8 +2,15 @@ import { asyncHandler } from "../utils/asyncHandler.js"
 import { apiError } from "../utils/apiError.js"
 import { apiResponse } from "../utils/apiResponse.js"
 import { User } from "../models/user.model.js"
-import { uploadOnCloudinary } from "../utils/cloudinary.js"
+import { Property } from "../models/property.model.js"
+import { deleteFromCloudinary, uploadOnCloudinary } from "../utils/cloudinary.js"
 import jwt from "jsonwebtoken"
+
+const extractPublicIdFromUrl = (url) => {
+    const parts = url.split('/')
+    const publicId = parts[parts.length - 1].split('.')[0]
+    return publicId
+}
 
 const generateAccessAndRefreshTokens = async (userId) => {
     try {
@@ -163,7 +170,7 @@ const changeCurrentPassword = asyncHandler(async (req, res) => {
     const { oldPassword, newPassword } = req.body
     const user = await User.findById(req.user?._id)
 
-    const isPasswordValid = user.isPasswordCorrect(oldPassword)
+    const isPasswordValid = await user.isPasswordCorrect(oldPassword)
     if (!isPasswordValid) {
         throw new apiError(400, "Invalid Password!")
     }
@@ -209,6 +216,8 @@ const updateUserDetails = asyncHandler(async (req, res) => {
 })
 
 const updateUserProfilePic = asyncHandler(async (req, res) => {
+    const user = await User.findById(req.user._id)
+    await deleteFromCloudinary(extractPublicIdFromUrl(user.profilePic))
     const profilePicLocalPath = req.file?.path
     if (!profilePicLocalPath) {
         throw new apiError("profile picture file is missing!")
@@ -219,22 +228,32 @@ const updateUserProfilePic = asyncHandler(async (req, res) => {
         throw new apiError(400, "Error while uploading profile picture!")
     }
 
-    const user = await User.findByIdAndUpdate(
-        req.user?._id,
-        {
-            $set: {
-                profilePic: profilePic.url
-            }
-        },
-        { new: true }
-    ).select("-password")
-
+    user.profilePic = profilePic.url
+    await user.save()
     return res
         .status(200)
         .json(
-            new apiResponse(200, user, "Profile picture updated successfully!")
+            new apiResponse(200, user.profilePic, "Profile picture updated successfully!")
         )
 })
 
+const deleteUser = asyncHandler(async (req, res) => {
+    const userToDelete = await User.findById(req.user._id)
+    const propertiesToDelete = await Property.find({ owner: req.user._id })
+    if (propertiesToDelete.length === 0) {
+        throw new apiError(404, "No properties found for the user!");
+    }
+    for (const property of propertiesToDelete) {
+        for (const imgUrl of property.images) {
+            await deleteFromCloudinary(extractPublicIdFromUrl(imgUrl));
+            await property.deleteOne();
+        }
+    }
+    await deleteFromCloudinary(extractPublicIdFromUrl(userToDelete.profilePic))
+    await userToDelete.deleteOne()
+    return res
+        .status(200)
+        .json(new apiResponse(200, {}, "User and existing properties (if any listed by user) deleted successfully!"));
+})
 
-export { registerUser, loginUser, logoutUser, refreshAccessToken, changeCurrentPassword, getCurrentUser, updateUserDetails, updateUserProfilePic } 
+export { registerUser, loginUser, logoutUser, refreshAccessToken, changeCurrentPassword, getCurrentUser, updateUserDetails, updateUserProfilePic, deleteUser } 

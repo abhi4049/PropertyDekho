@@ -49,7 +49,7 @@ const updateProperty = asyncHandler(async (req, res) => {
     if (req.files) {
         for (const imgurl of property.images) {
             await deleteFromCloudinary(extractPublicIdFromUrl(imgurl))
-          }
+        }
 
         for (const file of req.files) {
             const image = await uploadOnCloudinary(file.path);
@@ -58,7 +58,7 @@ const updateProperty = asyncHandler(async (req, res) => {
     } else {
         images = property.images
     }
-    
+
     property.description = description || property.description;
     property.price = price || property.price;
     property.flat = flat || property.flat;
@@ -85,20 +85,39 @@ const updateProperty = asyncHandler(async (req, res) => {
 
 const removeProperty = asyncHandler(async (req, res) => {
     const { propertyId } = req.params
-
     const propertyToDelete = await Property.findById(propertyId)
     if (!propertyToDelete) {
         throw new apiError(404, "No such property exists!")
     }
+    if (String(propertyToDelete.owner) !== String(req.user._id)) {
+        throw new apiError(400, "Unauthorized request!")
+    }
     for (const imgurl of propertyToDelete.images) {
         await deleteFromCloudinary(extractPublicIdFromUrl(imgurl))
-      }
+    }
 
     await propertyToDelete.deleteOne()
 
     return res
         .status(200)
-        .json(new apiResponse(200, propertyToDelete, "Property deleted successfully!"))
+        .json(new apiResponse(200, {}, "Property deleted successfully!"))
+})
+
+const removeAllProperties = asyncHandler(async (req, res) => {
+    const propertiesToDelete = await Property.find({ owner: req.user._id })
+    if (propertiesToDelete.length === 0) {
+        throw new apiError(404, "No properties found for the user!");
+    }
+    for (const property of propertiesToDelete) {
+        for (const imgUrl of property.images) {
+            await deleteFromCloudinary(extractPublicIdFromUrl(imgUrl));
+            await property.deleteOne();
+        }
+    }
+
+    return res
+        .status(200)
+        .json(new apiResponse(200, {}, "All properties listed by the user deleted successfully!"))
 })
 
 const getPropertyById = asyncHandler(async (req, res) => {
@@ -124,4 +143,4 @@ const getAllProperties = asyncHandler(async (req, res) => {
 })
 
 
-export { addProperty, removeProperty, updateProperty, getPropertyById, getUserProperties, getAllProperties } 
+export { addProperty, updateProperty, removeProperty, removeAllProperties, getPropertyById, getUserProperties, getAllProperties } 
