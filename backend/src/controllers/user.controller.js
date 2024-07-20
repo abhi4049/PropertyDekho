@@ -240,15 +240,14 @@ const updateUserProfilePic = asyncHandler(async (req, res) => {
 const deleteUser = asyncHandler(async (req, res) => {
     const userToDelete = await User.findById(req.user._id)
     const propertiesToDelete = await Property.find({ owner: req.user._id })
-    if (propertiesToDelete.length === 0) {
-        throw new apiError(404, "No properties found for the user!");
-    }
+    if (propertiesToDelete.length !== 0) {
     for (const property of propertiesToDelete) {
         for (const imgUrl of property.images) {
             await deleteFromCloudinary(extractPublicIdFromUrl(imgUrl));
             await property.deleteOne();
         }
     }
+}
     await deleteFromCloudinary(extractPublicIdFromUrl(userToDelete.profilePic))
     await userToDelete.deleteOne()
     return res
