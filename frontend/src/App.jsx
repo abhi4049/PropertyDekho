@@ -1,11 +1,12 @@
 import './App.css'
+import Navbar from './components/Navbar'
+import Footer from './components/Footer'
 
 function App() {
   return (
     <>
-      <h1 className="text-3xl font-bold">
-        Real Estate App project launching soon ...
-      </h1>
+        <Navbar />
+        <Footer />
     </>
   )
 }
